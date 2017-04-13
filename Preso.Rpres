@@ -1,0 +1,373 @@
+RNotebooks - The Powerful Polyglot
+========================================================
+author: Derek Slone-Zhen
+date: Wednesday, 12th April, 2017
+width: 1024
+height: 768
+
+<br><br><br>
+![](derek.png)
+
+```{r eval=FALSE, echo=FALSE}
+```
+
+The Origin And Ecosystem of RNotebooks
+========================================================
+left: 80%
+
+RNotebooks are part of the rich tapestry of Dynamic Documents that are available in the 
+R ecosystem.
+
+```{dot, echo=FALSE, fig.width=7, fig.height=6}
+digraph {
+
+    { rank="same"
+      ordering= "out"
+      "RMarkdown\n'engines'" [shape="invhouse", fontsize="12"]
+      "RMarkdown" [shape="note"]
+      "RMarkdown\n'engines'" -> RMarkdown [style="dotted", minlen="2" ]
+    }
+    
+    knitr [shape="invhouse"]
+    pandoc [shape="invhouse"]
+    RMarkdown [shape="note"]
+    Markdown [shape="note"]
+    RMarkdown -> knitr -> Markdown -> pandoc
+    "RMarkdown\n'engines'" -> knitr
+    
+    RMarkdown -> {
+      "Book-\ndown" [shape="folder"]
+      "Blog-\ndown" [shape="folder"]
+      "RNotebooks" [shape="note"]
+      "RPres"  [shape="note"]
+    } [dir="back", arrowtail="odiamond"]
+    
+  pandoc ->  {
+    node [shape="note"]
+      "PDF"
+      "Word"
+      "HTML"    
+  }  
+}
+
+```
+
+***
+
+* [Markdown](http://daringfireball.net/projects/markdown/)
+* [Markdown (Wikipedia)](https://en.wikipedia.org/wiki/Markdown)
+* [RMarkdown](http://rmarkdown.rstudio.com/)
+* [Pandoc](http://pandoc.org/)
+* [RMarkdown
+Engines](https://yihui.name/knitr/demo/engines/)
+* [Authoring
+RMarkdown
+Engines](http://rmarkdown.rstudio.com/authoring_knitr_engines.html)
+
+
+Markdown
+========================================================
+
+Markdown was first released in 2004 by [John Gruber](https://en.wikipedia.org/wiki/John_Gruber) and
+[Aaron Swartz](https://en.wikipedia.org/wiki/Aaron_Swartz)
+
+It was designed _firstly_ to be human-readable, and _secondly_ 
+to be machine readable.  Like [YAML](https://en.wikipedia.org/wiki/YAML) in the world
+of configuration files, Markdown was a response to the failed aspirations of 
+[XML](https://en.wikipedia.org/wiki/XML) to be a human-readable language.
+
+It has become a de-facto standard in many environments, including GitHub, and is available 
+either out-of-the box or as a plug in for many wikis and issue tracking systems.
+
+[Quick Markdown Example](http://www.unexpected-vortices.com/sw/rippledoc/quick-markdown-example.html)
+
+
+RMarkdown
+========================================================
+left: 50%
+
+The ability to insert chunks of `R` code into vanilla Markdown.
+
+Converted by the [`knitr`](https://github.com/yihui/knitr) package,
+created by [Yihui Xie](https://yihui.name/knitr/).
+
+http://rmarkdown.rstudio.com/
+
+RMarkdown and knitr have been working in this world for for over 
+4 years now.
+
+***
+
+## Example
+
+Now, let me show you a plot:
+
+```{r, echo=TRUE}
+plot(cars)
+```
+
+RMarkdown Engines
+========================================================
+type: section
+##  - the Polyglot Appears
+
+Supported Languages
+========================================================
+left: 80%
+
+In addition to `R` code, the `knitr` package support additional language engines,
+and allows you to add your own too.  (We'll show that later.)
+
+Most of the language you know and love are available (see right).
+
+***
+
+* **python**
+* ruby
+* **bash**
+* **dot**
+* awk
+* **sql**
+* Scala
+
+Execution Contexts & Persistence
+========================================================
+left:60%
+
+However, unlike the `R` chunks, other language chunks get run in individual 
+execution contexts.  For `R` chunks, a single R session runs in the background
+and all `R` chunks are executed within that context, allowing for variable sharing and building up an environment.  For other language, an interpreter (or other execution context) is 
+launched for each chunk.  This means that variables will have to be persisted by hand,
+typically through the file system.
+
+***
+
+Here's a quick example in Perl:
+
+```{perl, engine.path="C:/Strawberry/perl/bin/perl.exe"}
+use strict;
+my $a = 5;
+while($a > 0) {
+    print "Hello-#$a\n";
+    $a--;
+}
+```
+
+RMarkdown Engine Languages
+========================================================
+type: sub-section
+
+
+Python
+========================================================
+
+Simply works.
+
+I've had success with with 
+[Anaconda](https://docs.continuum.io/anaconda/)
+and [babun](http://babun.github.io/) 
+and [cygwin](https://www.cygwin.com/) should work too.
+
+But, as for the much talked-about `feather` package that promises 
+efficient file-inter-op between `R` and `python`; I totally failed to get that
+`python` module to install on Windows 10 Home.  It requires a
+recent C++ compiler to build.
+
+
+Perl
+========================================================
+
+Works, as seen above, but I used the [Strawberry Perl](http://strawberryperl.com/)
+as the babun version was getting linker errors.
+
+(The truth is, I probably have too many cygwin-based tools all on my path, and
+the poor things are getting confused and intertwined in an unpleasant way!)
+
+bash
+========================================================
+
+I use the bash in a babun distribution and it worked well.  It's even tolerant
+of windows-style file names being passed to it.  However, it's _not_ tolerant
+of the full-stop that the RNotebook environment adds to the end of its file names ☹
+
+So, getting bash to work on Windows take a little bit of trickery, especially since the style
+of invocation is different between the RNotebook environment and the knitr processor.
+
+bash for RNotenbooks - bash.bat
+========================================================
+
+The following batch file proved to be the key for me:
+
+```{r code=readLines('bash.bat'), eval=FALSE}
+```
+
+bash for knitr - engine.path
+========================================================
+
+Together with an explicit engine.path for `bash` blocks
+to be used by `knitr`.<br>(RNotebook processing engine
+appears to ignore theses.)
+
+```{r, eval=FALSE}
+knitr::opts_chunk$set(engine.path = list(
+  bash = 'C:/Users/Derek Slone-Zhen/.babun/cygwin/bin/bash.exe'
+))
+```
+
+cmd
+========================================================
+
+A code engine for Windows users!
+
+```{r code=readLines('win_cmd.R'), eval=FALSE, size='xsmall'}
+```
+
+
+dot (Graphviz)
+========================================================
+left: 25%
+
+[Graphviz](http://www.graphviz.org/)
+is an awesome tool for auto-magically laying out graphs.
+
+You've seen two already in this presentation.
+
+The box th the right shows the "source code" for the first
+graph.
+
+***
+
+```{dot, eval=FALSE, fig.width=7, fig.height=6}
+digraph {
+
+    { rank="same"
+      ordering= "out"
+      "RMarkdown\n'engines'" [shape="invhouse", fontsize="12"]
+      "RMarkdown" [shape="note"]
+      "RMarkdown\n'engines'" -> RMarkdown [style="dotted", minlen="2" ]
+    }
+    
+    knitr [shape="invhouse"]
+    pandoc [shape="invhouse"]
+    RMarkdown [shape="note"]
+    Markdown [shape="note"]
+    RMarkdown -> knitr -> Markdown -> pandoc
+    "RMarkdown\n'engines'" -> knitr
+    
+    RMarkdown -> {
+      "Book-\ndown" [shape="folder"]
+      "Blog-\ndown" [shape="folder"]
+      "RNotebooks" [shape="note"]
+      "RPres"  [shape="note"]
+    } [dir="back", arrowtail="odiamond"]
+    
+  pandoc ->  {
+    node [shape="note"]
+      "PDF"
+      "Word"
+      "HTML"    
+  }  
+}
+
+```
+
+Beyond RMarkdown
+========================================================
+type: section
+
+R Presentations
+========================================================
+
+https://support.rstudio.com/hc/en-us/articles/200486468-Authoring-R-Presentations
+
+
+Multi-part Documents
+========================================================
+type: sub-section
+
+Bookdown
+========================================================
+
+A system for authoring complete books, too large for a single document
+
+* https://bookdown.org/yihui/bookdown/
+* https://bookdown.org/
+
+
+Blogdown
+========================================================
+
+Go on, take a guess!
+
+> After much searching around, I found blogdown by Yihui Xie, the man who created Knitr. Blogdown uses Hugo, a blogging framework for static pages built using the Go language. One word of warning, blogdown is still under development, but I’ve tested it out and there have been minor issues, but most of it is because there is no documentation right now if you’re stuck.
+
+[http://kevinfw.com/post/blogging-with-r-markdown/]
+
+* https://github.com/rstudio/blogdown
+
+
+RNotebooks
+========================================================
+type: sub-section
+
+
+Why I'm a raving fan
+========================================================
+
+* Interactive workbench for rapid prototyping
+* Reproducible research
+* Amenable to source control (git is the integrated into RSudio)
+* Languange "neutrality"
+  * pick the right / best / easiest / one-you-know langauge for the job
+* Alows for embedded `sql` too
+* Can also be knitted to HTML, PDF or Word
+  * (PDF requires a LaTeX installation, typically 
+    MikTeX on windows.)
+
+Demo
+========================================================
+type: prompt
+
+If time permits...
+========================================================
+type: sub-section
+
+
+brew
+========================================================
+left: 65%
+
+`brew` is a templateing engine for `R`, much like PHP or T4 templates.
+
+Lets just dive in and take a look ...
+
+***
+
+```{dot, echo=FALSE, fig.width=7, fig.height=6}
+digraph {
+
+    "brew\ntemplate" [shape="note"]
+    brew [shape="invhouse"]
+    
+    { rank="same"
+      ordering= "out"
+      "RMarkdown" [shape="note"]
+    }
+    
+    "brew\ntemplate" -> brew -> RMarkdown
+    
+    knitr [shape="invhouse"]
+    pandoc [shape="invhouse"]
+    RMarkdown [shape="note"]
+    Markdown [shape="note"]
+    RMarkdown -> knitr -> Markdown -> pandoc
+
+  pandoc ->  {
+    node [shape="note"]
+      "PDF"
+      "Word"
+      "HTML"    
+  }  
+}
+
+```

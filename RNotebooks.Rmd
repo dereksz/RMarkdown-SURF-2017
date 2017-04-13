@@ -1,0 +1,504 @@
+---
+title: "R Notebook"
+author: "Derek Slone-Zhen"
+date: "Wednesday, 12th April, 2017"
+output:
+  html_document:
+    df_print: kable
+  html_notebook: default
+  word_document:
+    reference_docx: Template.docx
+always_allow_html: yes
+---
+
+# Setup
+
+## Favourite Libraries
+
+We'll load up some of my standard  R packages for later use.
+
+```{r}
+library (pacman)
+p_load (magrittr)
+p_load (ggplot2)
+p_load (data.table)
+
+```
+
+## Language Engines for knitr
+
+```{r}
+knitr::opts_chunk$set(engine.path = list(
+  bash = 'C:/Users/Derek Slone-Zhen/.babun/cygwin/bin/bash.exe',
+  perl = "C:/Strawberry/perl/bin/perl.exe"
+))
+
+```
+
+## And a windows cmd processor
+
+```{r echo=FALSE}
+source('win_cmd.R')
+```
+
+
+# Welcome to an RNotebooks
+
+RNotebooks allow the use of multiple, interwoven languages.
+
+We'll demonstrate the getting, ingestion, and analysis of a Fuel data set.
+
+## Fetch 'n' Sniff
+
+Fetch : I can do this in `R`, but the command prompt is my home.  Less friction for me here.
+
+```{bash}
+wget -c https://data.nsw.gov.au/data/dataset/a97a46fc-2bdd-4b90-ac7f-0cb1e8d7ac3b/resource/5ad2ad7d-ccb9-4bc3-819b-131852925ede/download/Service-Station-and-Price-History-March-2017.xlsx
+
+```
+
+I'll take a quick look at the file, sometimes it's really a CSV file with an Excel extension.
+
+```{bash}
+hexdump -C Service-Station-and-Price-History-March-2017.xlsx | head -n20
+```
+
+OK, looks like a real Excel file.  The `PK` at the beginning is the give-away of a zipped file, which is what Excels
+newer file formats are.  (Zipped XML files + some othe assets.)
+
+## `readxl`
+
+No external dependancies with this library, and installes with C / C++ native libraries for reading both
+old and new Excel file formats.  Thanks [Hadley](http://hadley.nz/)!
+
+```{r}
+p_load(readxl)
+DATA <- read_excel("~/RNotebooks/Service-Station-and-Price-History-March-2017.xlsx")
+p_load(data.table)
+DATA <- data.table(DATA)
+
+```
+
+and take a peek:
+
+```{r}
+DATA[1:1000,]
+
+```
+
+## Sniffing Deeply
+
+Not the most friendly.  Lets try some extra packages:
+
+```{r, fig.width=20}
+p_load(DT)
+datatable(DATA[Suburb %in% c('Chatswood', 'Lane Cove', 'Artarmon', 'Lane Cove West')], filter="top")
+
+```
+
+## Summarising Data
+
+```{r}
+summary(DATA)
+
+```
+
+That's a lot of charaters that we're not getting summaries on.  Lets convert all characters to factors, and the postcodes too.
+
+```{r}
+for (j in which(sapply(DATA,is.character))) {
+  set(DATA, j=j, value=factor(DATA[[j]], ordered = FALSE))
+}
+
+# Ask me why...
+DATA <- DATA[,Postcode := factor(as.character(Postcode), ordered = FALSE)]
+```
+
+and try again:
+
+```{r}
+summary(DATA, maxsum = 8)
+
+```
+
+Lets focus in on our top four fuels.
+
+```{r}
+DATA[,.N,by=FuelCode][order(-N)] %>%
+  head(n=4) ->
+  top4
+
+DATA4 <- DATA[FuelCode %in% top4$FuelCode]
+
+```
+
+## Visualising Data
+
+```{r, fig.height=6, fig.width=10}
+p_load(ggplot2)
+ggplot(data=DATA4) +
+  scale_y_continuous(limits=c(75,200)) +
+  geom_violin(aes(y=Price, x=Brand)) +
+  facet_grid(FuelCode ~ ., scales='free_y') +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+
+```
+
+```{r, fig.height=6, fig.width=12}
+g <- ggplot(data=DATA4[FuelCode == "U91"]) +
+  geom_point(aes(y=Price, x=PriceUpdatedDate, colour=Brand), alpha=0.6, position='jitter') +
+  scale_y_continuous(limits = c(75,175))
+g
+
+```
+
+But what are those _really_ cheap petrol prices...
+
+Let's get a more interactive visualisation.
+
+```{r, fig.height=10, fig.width=12}
+p_load(plotly)
+ggplotly(g)
+
+```
+
+# Copying Data To SQL Server
+
+## Save as CSV (or better!)
+
+```{r}
+write.csv(DATA, 'Service-Station-and-Price-History-March-2017.csv', row.names = FALSE)
+
+```
+
+A couple of quick file tests - do I have a nice CSV I can upload?
+
+Short of writing significant chunks of code, `BCP` is the only way to upload data quickly into
+SQL Server, and it's _very_ picky over its file formats;
+* doesn't tollerate quotes very well
+* can tollearate 'embeded' field separators (i.e. the quotes don't help)
+* can't tollerate embedded row separators (i.e. a new line within a quoted string)
+
+```{bash}
+< Service-Station-and-Price-History-March-2017.csv \
+  tr -d -c ',\n' | 
+  awk -e '1 {print length($0)}' | 
+  sort | 
+  uniq -c |
+  sort -r -n
+```
+
+```{r}
+ncol(DATA)
+```
+
+```{bash}
+awk -F, -e 'NF != 9 {print}' Service-Station-and-Price-History-March-2017.csv | head
+
+```
+
+Blah!  Commas in the addresses (and quotes that BCP won't like either).
+
+Re-export using [ASCII Delimiters](https://ronaldduncan.wordpress.com/2009/10/31/text-file-formats-ascii-delimited-text-not-csv-or-tab-delimited-text/)
+0x0F (Unit Separator) and 0x0E (Record Separator), and supress the quotes.
+
+```{r}
+write.table(
+  DATA, 
+  'Service-Station-and-Price-History-March-2017.0F0E', 
+  row.names = FALSE,
+  quote = FALSE,
+  sep = "\x0F",
+  eol = "\x0E")
+
+```
+
+And re-test:
+
+
+```{bash}
+< Service-Station-and-Price-History-March-2017.0F0E \
+  tr -d -c $'\x0E\x0F' | 
+  tr $'\x0E' '\n' |
+  awk -e '1 {print length($0)}' | 
+  sort | 
+  uniq -c
+
+```
+  
+## Upload the 0E0F
+
+Need the latest `rodbcdbi`
+
+```{r}
+p_load_gh("rstats-db/DBI")
+p_load_gh("teramonagi/RODBCDBI")
+```
+
+And load up the odbc driver and connection to local Microsoft SQL Server Database.
+
+```{r}
+p_load(odbc)
+# drv <- dbDriver("ODBC")
+con_template <- 'driver={SQL Server Native Client 11.0};Server=%s;Database=%s;Trusted_Connection=yes'
+# db <- dbConnect(drv, connection = sprintf(con_template, server=".", database= "test")) 
+
+db <- DBI::dbConnect(odbc::odbc(),.connection_string = sprintf(con_template, server=".", database= "test"))
+
+```
+
+Check that the DB is good
+
+```{sql connection=db}
+SELECT DB_NAME()
+
+```
+
+OK, we're in the test DB
+
+Now see if the table already exists; we use `output.var` to capture the result set into an `R` variable 
+for later inspection and testing.
+
+```{sql connection=db, output.var="oid"}
+SELECT OBJECT_ID('dbo.Service-Station-and-Price-History-March-2017')
+
+```
+
+```{r}
+oid <- oid[1,1]
+oid # should be NA
+
+```
+
+Use R to sketch out the body of an SQL `CREATE TABLE`.
+
+```{r}
+sprintf("%-20s %s not null,",
+        colnames(DATA), 
+        DATA %>%
+          lapply(class) %>%
+          sapply(head,1) %>%
+          sapply(switch, 
+               character = 'varchar(255)',
+               POSIXct = 'datetime2(0)',
+               numeric = 'smallmoney')
+  ) %>%
+  paste0(collapse="\n") %>%
+  cat
+
+```
+
+```{sql connection=db}
+DROP TABLE IF EXISTS dbo."Service-Station-and-Price-History-March-2017"
+-- And return a result set to keep the RNotebook happy
+SELECT OBJECT_ID('dbo.Service-Station-and-Price-History-March-2017')
+
+```
+
+```{sql connection=db}
+CREATE TABLE dbo."Service-Station-and-Price-History-March-2017"
+(
+	ServiceStationName 		varchar(255) not null,
+	Address 		          varchar(255) not null,
+	Suburb 		            varchar(255) not null,
+	Postcode 		          char(4) not null,
+	Brand 		            varchar(255) not null,
+	FuelCode 		          char(3) not null,
+	PriceUpdatedDate 		  datetime2(0) not null,
+	Price 		            smallmoney not null
+)
+-- And return a result set to keep the RNotebook happy
+SELECT OBJECT_ID('dbo.Service-Station-and-Price-History-March-2017')
+
+```
+
+I can never remember the syntax for `bcp` fully, so lets get a copy here for reference.
+
+```{bash, error=TRUE}
+bcp
+
+```
+
+Now I can craft the `bcp` for upload.
+
+
+```{bash}
+bcp \
+  "dbo.[Service-Station-and-Price-History-March-2017]" \
+  in \
+  'Service-Station-and-Price-History-March-2017.0F0E' \
+  -T -S . -d test \
+  -c -t $'\x0F' -r $'\x0E' -C UTF-8 \
+  -F 2 \
+  -h TABLOCK -b 100000 \
+  -e errors
+
+```
+
+
+Print out (the start of) any errors
+
+```{bash}
+head errors
+
+```
+
+# Querying from Database
+
+Now we can query from the database
+
+```{r}
+fuel <- 'U91'
+
+```
+
+```{sql connection=db, output.var='DBDATA'}
+SELECT 
+  -- TOP 10
+  ServiceStationName, Suburb, Brand, PriceUpdatedDate, Price
+FROM dbo."Service-Station-and-Price-History-March-2017"
+WHERE FuelCode = ?fuel
+ORDER BY Price ASC
+
+```
+
+```{r}
+DBDATA <- data.table(DBDATA)
+DBDATA
+
+```
+
+# Save data and read it back in many Languages
+
+```{r}
+p_load(feather)
+write_feather(DBDATA,"Service-Station-and-Price-History-March-2017.feather")
+Sys.setenv(file_in="Service-Station-and-Price-History-March-2017")
+
+```
+
+
+
+```{python, error=TRUE}
+import os
+import pandas
+import feather
+
+file_in = os.environ["file_in"] + ".feather"
+df = feather.read_dataframe(file_in)
+df.head(10)
+
+```
+
+
+```{python}
+import os
+import pandas as pd
+
+file_in = os.environ["file_in"] + ".csv"
+df = pd.read_csv(file_in)
+print(df.head(10))
+
+```
+
+```{perl engine.path="C:/Strawberry/perl/bin/perl.exe"}
+use Parse::CSV;
+use Data::Dumper;
+ 
+my $objects = Parse::CSV->new(
+    file => $ENV{file_in} . '.csv',
+    names      => 1,
+);
+
+my $max_rows = 3;
+while ( my $row = $objects->fetch ) {
+  print Dumper($row);
+  if (--$max_rows <= 0) { last; }
+}
+
+```
+
+```{ruby engine.path="C:/Ruby23-x64/bin/ruby.exe"}
+require 'csv'
+require 'pp'
+require 'yaml'
+
+# print pp(ENV)
+
+file_in = ENV["file_in"]
+
+file_in = file_in + ".csv"
+customers = CSV.read(file_in)
+
+pp(customers[1..3])
+
+```
+
+
+# Sillyness digression - what else can we do here?
+
+## LaTeX fragments!
+
+$$
+x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+$$
+
+Which, of course, also means we can use set algebra notation:
+
+$$
+Query = \{ \forall p \in [\text{Service-Station-and-Price-History-March-2017}] | p_{FuelCode} = \text{U91} \}
+
+$$
+
+
+# Tidy up after ourselves
+
+```{r TakeDown, echo=FALSE}
+if (interactive()) {
+  invisible({
+    dbDisconnect(db)
+    # dbDisconnect(db_prod)
+    dbUnloadDriver(drv)
+  })
+}
+
+```
+
+# Sneaky Stuff
+
+## I've a local bash script
+
+The RNotebook mechanisms use a different strategy for executing code blocks (at lease bash one): 
+namely that they write the text of the block to a temp file and then invoke the file along as:
+
+`bash` _`file_name`_
+
+Whereas the `knitr` engine invokes bash as `bash -c ` _`code_block`_.
+
+
+```{r code=readLines('bash.bat'), eval=FALSE}
+```
+
+# Bulid Info & Version Control 
+
+## sessionInfo
+
+```{r}
+sessionInfo()
+```
+
+## Version Control
+
+This code ensure that when we `knit` the document, all changes get committed to
+`git` and the SHA1 checksum of that commit is embedded in the document for 
+reproducability.
+
+
+```{cmd}
+git add -A .
+git commit -m "Knitting..."
+git status
+git rev-parse HEAD
+
+```
+

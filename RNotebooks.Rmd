@@ -161,10 +161,23 @@ But what are those _really_ cheap petrol prices...
 
 Let's get a more interactive visualisation.
 
-```{r, fig.height=10, fig.width=12}
+```{r, fig.height=10, fig.width=18}
 p_load(plotly)
-ggplotly(g)
+g <- ggplot(data=DATA4[FuelCode == "U91"]) +
+  geom_violin(aes(y=Price, x=Brand), colour="red", fill='red', alpha=0.25) +
+  geom_boxplot(aes(y=Price, x=Brand), fill='transparent') +
+  scale_y_continuous(limits = c(75,175)) +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+```
 
+
+```{r, fig.height=10, fig.width=18}
+print(g)
+```
+
+```{r, fig.height=10, fig.width=18, eval=interactive()}
+# Only in the RNotebook
+ggplotly(g)
 ```
 
 # Copying Data To SQL Server

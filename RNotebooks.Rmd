@@ -260,16 +260,16 @@ p_load(odbc)
 # drv <- dbDriver("ODBC")
 con_template <- 'driver={SQL Server Native Client 11.0};Server=%s;Database=%s;Trusted_Connection=yes'
 # db <- dbConnect(drv, connection = sprintf(con_template, server=".", database= "test")) 
-
-db <- DBI::dbConnect(odbc::odbc(),.connection_string = sprintf(con_template, server=".", database= "test"))
+drv <- odbc::odbc()
+db <- DBI::dbConnect(drv,.connection_string = sprintf(con_template, server=".", database= "test"))
 
 ```
 
 ```{r eval=has.postgres}
 p_load(DBI)
-p_load(RPostgreSQL)
-db <- dbConnect(PostgreSQL(), dbname="test")
-
+p_load(RPostgreSQL) 
+drv <- PostgreSQL()
+db <- dbConnect(drv, dbname="test")
 ```
 
 Check that the DB is good
@@ -481,6 +481,7 @@ $$
 if (!interactive()) {
   invisible({
     dbDisconnect(db)
+    dbUnloadDriver(drv)
   })
 }
 ```

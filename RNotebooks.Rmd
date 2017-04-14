@@ -463,12 +463,10 @@ $$
 
 # Tidy up after ourselves
 
-```{r TakeDown, echo=FALSE, eval=is.windows}
+```{r TakeDown}
 if (!interactive()) {
   invisible({
     dbDisconnect(db)
-    # dbDisconnect(db_prod)
-    dbUnloadDriver(drv)
   })
 }
 ```

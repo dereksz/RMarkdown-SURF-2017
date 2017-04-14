@@ -386,7 +386,7 @@ ORDER BY Price ASC
 
 ```{r}
 DBDATA <- if (is.windows || has.postgres) data.table(DBDATA) else DATA
-DBDATA
+DBDATA[1:10]
 ```
 
 # Save data and read it back in many Languages

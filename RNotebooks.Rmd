@@ -95,7 +95,8 @@ DATA[1:(if (interactive()) 1000 else 10),]
 
 Not the most friendly.  Lets try some extra packages:
 
-```{r}
+```{r eval=interactive()}
+# Only in the RNotebook
 p_load(DT)
 datatable(DATA[Suburb %in% c('Chatswood', 'Lane Cove', 'Artarmon', 'Lane Cove West')], filter="top")
 

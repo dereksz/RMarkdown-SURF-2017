@@ -361,7 +361,7 @@ head errors
 
 ### Upload for Postgres
 
-```{bash}
+```{bash eval=has.postgres}
 < 'Service-Station-and-Price-History-March-2017.1F1E' \
   bbe -b ':/\x1E/' -e 'D 1;s/\\/\\\\/;s/\r/\\r/;s/\n/\\n/;s/\x1E/\n/' |
   psql test -c "COPY \"Service-Station-and-Price-History-March-2017\"

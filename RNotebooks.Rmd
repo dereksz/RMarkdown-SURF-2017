@@ -30,6 +30,7 @@ p_load (data.table)
 
 ```{r}
 is.windows <- .Platform$OS.type == "windows"
+has.postgres <- !is.windows
 
 if (is.windows) {
   knitr::opts_chunk$set(engine.path = list(
@@ -250,26 +251,25 @@ db <- DBI::dbConnect(odbc::odbc(),.connection_string = sprintf(con_template, ser
 
 ```
 
+```{r eval=has.postgres}
+p_load(DBI)
+p_load(RPostgreSQL)
+db <- dbConnect(PostgreSQL(), dbname="test")
+
+```
+
 Check that the DB is good
 
-```{sql connection=db, eval=is.windows}
-SELECT DB_NAME()
-
+```{r, eval=has.postgres, echo=has.postgres}
+isPostgresqlIdCurrent(db)
 ```
 
-OK, we're in the test DB
+Drop the table if it already exists
 
-Now see if the table already exists; we use `output.var` to capture the result set into an `R` variable 
-for later inspection and testing.
-
-```{sql connection=db, output.var="oid", eval=is.windows}
-SELECT OBJECT_ID('dbo.Service-Station-and-Price-History-March-2017')
-
-```
-
-```{r, eval=is.windows}
-oid <- oid[1,1]
-oid # should be NA
+```{sql connection=db}
+DROP TABLE IF EXISTS "Service-Station-and-Price-History-March-2017";
+-- And return a result set to keep the RNotebook happy
+SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Service-Station-and-Price-History-March-2017';
 
 ```
 
@@ -284,22 +284,16 @@ sprintf("%-20s %s not null,",
           sapply(switch, 
                character = 'varchar(255)',
                POSIXct = 'datetime2(0)',
-               numeric = 'smallmoney')
+               numeric = 'numeric(4,1)')
   ) %>%
   paste0(collapse="\n") %>%
   cat
 
 ```
 
-```{sql connection=db, eval=is.windows}
-DROP TABLE IF EXISTS dbo."Service-Station-and-Price-History-March-2017"
--- And return a result set to keep the RNotebook happy
-SELECT OBJECT_ID('dbo.Service-Station-and-Price-History-March-2017')
-
-```
 
 ```{sql connection=db, eval=is.windows}
-CREATE TABLE dbo."Service-Station-and-Price-History-March-2017"
+CREATE TABLE "Service-Station-and-Price-History-March-2017"
 (
 	ServiceStationName 		varchar(255) not null,
 	Address 		          varchar(255) not null,
@@ -308,12 +302,31 @@ CREATE TABLE dbo."Service-Station-and-Price-History-March-2017"
 	Brand 		            varchar(255) not null,
 	FuelCode 		          char(3) not null,
 	PriceUpdatedDate 		  datetime2(0) not null,
-	Price 		            smallmoney not null
-)
+	Price 		            numeric(4,1) not null
+);
 -- And return a result set to keep the RNotebook happy
-SELECT OBJECT_ID('dbo.Service-Station-and-Price-History-March-2017')
+SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Service-Station-and-Price-History-March-2017';
 
 ```
+
+```{sql connection=db, eval=has.postgres}
+CREATE TABLE "Service-Station-and-Price-History-March-2017"
+(
+	ServiceStationName 		varchar(255) not null,
+	Address 		          varchar(255) not null,
+	Suburb 		            varchar(255) not null,
+	Postcode 		          char(4) not null,
+	Brand 		            varchar(255) not null,
+	FuelCode 		          char(3) not null,
+	PriceUpdatedDate 		  timestamp not null,
+	Price 		            numeric(4,1) not null
+);
+-- And return a result set to keep the RNotebook happy
+SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Service-Station-and-Price-History-March-2017';
+
+```
+
+### Upload for SQL Server
 
 I can never remember the syntax for `bcp` fully, so lets get a copy here for reference.
 
@@ -346,29 +359,34 @@ head errors
 
 ```
 
+### Upload for Postgres
+
+```{bash}
+< 'Service-Station-and-Price-History-March-2017.1F1E' \
+  bbe -b ':/\x1E/' -e 'D 1;s/\\/\\\\/;s/\r/\\r/;s/\n/\\n/;s/\x1E/\n/' |
+  psql test -c "COPY \"Service-Station-and-Price-History-March-2017\"
+      FROM STDIN WITH DELIMITER AS E'\x1F'"
+    
+```
+
 # Querying from Database
 
 Now we can query from the database
 
 ```{r}
 fuel <- 'U91'
-
 ```
 
-```{sql connection=db, output.var='DBDATA', eval=is.windows}
-SELECT 
-  -- TOP 10
-  ServiceStationName, Suburb, Brand, PriceUpdatedDate, Price
+```{sql connection=db, output.var='DBDATA'}
+SELECT ServiceStationName, Suburb, Brand, PriceUpdatedDate, Price
 FROM "Service-Station-and-Price-History-March-2017"
 WHERE FuelCode = ?fuel
 ORDER BY Price ASC
-
 ```
 
 ```{r}
-DBDATA <- if (is.windows) data.table(DBDATA) else DATA
+DBDATA <- if (is.windows || has.postgres) data.table(DBDATA) else DATA
 DBDATA
-
 ```
 
 # Save data and read it back in many Languages

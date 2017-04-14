@@ -3,11 +3,12 @@ title: "R Notebook"
 author: "Derek Slone-Zhen"
 date: "Wednesday, 12th April, 2017"
 output:
+  word_document:
+    reference_docx: Template.docx
   html_document:
     df_print: kable
   html_notebook: default
-  word_document:
-    reference_docx: Template.docx
+  github_document: default
 always_allow_html: yes
 ---
 
@@ -28,11 +29,14 @@ p_load (data.table)
 ## Language Engines for knitr
 
 ```{r}
-knitr::opts_chunk$set(engine.path = list(
-  bash = 'C:/Users/Derek Slone-Zhen/.babun/cygwin/bin/bash.exe',
-  perl = "C:/Strawberry/perl/bin/perl.exe"
-))
+is.windows <- .Platform$OS.type == "windows"
 
+if (is.windows) {
+  knitr::opts_chunk$set(engine.path = list(
+    bash = 'C:/Users/Derek Slone-Zhen/.babun/cygwin/bin/bash.exe',
+    perl = "C:/Strawberry/perl/bin/perl.exe"
+  ))
+}
 ```
 
 ## And a windows cmd processor
@@ -53,7 +57,7 @@ We'll demonstrate the getting, ingestion, and analysis of a Fuel data set.
 Fetch : I can do this in `R`, but the command prompt is my home.  Less friction for me here.
 
 ```{bash}
-wget -c https://data.nsw.gov.au/data/dataset/a97a46fc-2bdd-4b90-ac7f-0cb1e8d7ac3b/resource/5ad2ad7d-ccb9-4bc3-819b-131852925ede/download/Service-Station-and-Price-History-March-2017.xlsx
+wget -c 'https://data.nsw.gov.au/data/dataset/a97a46fc-2bdd-4b90-ac7f-0cb1e8d7ac3b/resource/5ad2ad7d-ccb9-4bc3-819b-131852925ede/download/Service-Station-and-Price-History-March-2017.xlsx'
 
 ```
 
@@ -73,7 +77,7 @@ old and new Excel file formats.  Thanks [Hadley](http://hadley.nz/)!
 
 ```{r}
 p_load(readxl)
-DATA <- read_excel("~/RNotebooks/Service-Station-and-Price-History-March-2017.xlsx")
+DATA <- read_excel("Service-Station-and-Price-History-March-2017.xlsx")
 p_load(data.table)
 DATA <- data.table(DATA)
 
@@ -82,7 +86,7 @@ DATA <- data.table(DATA)
 and take a peek:
 
 ```{r}
-DATA[1:1000,]
+DATA[1:(if (interactive()) 1000 else 10),]
 
 ```
 
@@ -90,7 +94,7 @@ DATA[1:1000,]
 
 Not the most friendly.  Lets try some extra packages:
 
-```{r, fig.width=20}
+```{r}
 p_load(DT)
 datatable(DATA[Suburb %in% c('Chatswood', 'Lane Cove', 'Artarmon', 'Lane Cove West')], filter="top")
 
@@ -228,16 +232,15 @@ And re-test:
   
 ## Upload the 0E0F
 
-Need the latest `rodbcdbi`
-
-```{r}
-p_load_gh("rstats-db/DBI")
-p_load_gh("teramonagi/RODBCDBI")
+```{r echo=FALSE}
+# For non-windows, we won't to the sql parts
+db <- NULL
 ```
 
 And load up the odbc driver and connection to local Microsoft SQL Server Database.
 
-```{r}
+```{r eval=is.windows}
+p_load(DBI)
 p_load(odbc)
 # drv <- dbDriver("ODBC")
 con_template <- 'driver={SQL Server Native Client 11.0};Server=%s;Database=%s;Trusted_Connection=yes'
@@ -249,7 +252,7 @@ db <- DBI::dbConnect(odbc::odbc(),.connection_string = sprintf(con_template, ser
 
 Check that the DB is good
 
-```{sql connection=db}
+```{sql connection=db, eval=is.windows}
 SELECT DB_NAME()
 
 ```
@@ -259,12 +262,12 @@ OK, we're in the test DB
 Now see if the table already exists; we use `output.var` to capture the result set into an `R` variable 
 for later inspection and testing.
 
-```{sql connection=db, output.var="oid"}
+```{sql connection=db, output.var="oid", eval=is.windows}
 SELECT OBJECT_ID('dbo.Service-Station-and-Price-History-March-2017')
 
 ```
 
-```{r}
+```{r, eval=is.windows}
 oid <- oid[1,1]
 oid # should be NA
 
@@ -288,14 +291,14 @@ sprintf("%-20s %s not null,",
 
 ```
 
-```{sql connection=db}
+```{sql connection=db, eval=is.windows}
 DROP TABLE IF EXISTS dbo."Service-Station-and-Price-History-March-2017"
 -- And return a result set to keep the RNotebook happy
 SELECT OBJECT_ID('dbo.Service-Station-and-Price-History-March-2017')
 
 ```
 
-```{sql connection=db}
+```{sql connection=db, eval=is.windows}
 CREATE TABLE dbo."Service-Station-and-Price-History-March-2017"
 (
 	ServiceStationName 		varchar(255) not null,
@@ -314,7 +317,7 @@ SELECT OBJECT_ID('dbo.Service-Station-and-Price-History-March-2017')
 
 I can never remember the syntax for `bcp` fully, so lets get a copy here for reference.
 
-```{bash, error=TRUE}
+```{bash, error=TRUE, eval=is.windows}
 bcp
 
 ```
@@ -322,7 +325,7 @@ bcp
 Now I can craft the `bcp` for upload.
 
 
-```{bash}
+```{bash, eval=is.windows}
 bcp \
   "dbo.[Service-Station-and-Price-History-March-2017]" \
   in \
@@ -338,7 +341,7 @@ bcp \
 
 Print out (the start of) any errors
 
-```{bash}
+```{bash, eval=is.windows}
 head errors
 
 ```
@@ -352,18 +355,18 @@ fuel <- 'U91'
 
 ```
 
-```{sql connection=db, output.var='DBDATA'}
+```{sql connection=db, output.var='DBDATA', eval=is.windows}
 SELECT 
   -- TOP 10
   ServiceStationName, Suburb, Brand, PriceUpdatedDate, Price
-FROM dbo."Service-Station-and-Price-History-March-2017"
+FROM "Service-Station-and-Price-History-March-2017"
 WHERE FuelCode = ?fuel
 ORDER BY Price ASC
 
 ```
 
 ```{r}
-DBDATA <- data.table(DBDATA)
+DBDATA <- if (is.windows) data.table(DBDATA) else DATA
 DBDATA
 
 ```
@@ -377,16 +380,14 @@ Sys.setenv(file_in="Service-Station-and-Price-History-March-2017")
 
 ```
 
-
-
-```{python, error=TRUE}
+```{python, error=is.windows}
 import os
 import pandas
 import feather
 
 file_in = os.environ["file_in"] + ".feather"
 df = feather.read_dataframe(file_in)
-df.head(10)
+print(df.head(10))
 
 ```
 
@@ -401,7 +402,7 @@ print(df.head(10))
 
 ```
 
-```{perl engine.path="C:/Strawberry/perl/bin/perl.exe"}
+```{perl}
 use Parse::CSV;
 use Data::Dumper;
  
@@ -415,23 +416,14 @@ while ( my $row = $objects->fetch ) {
   print Dumper($row);
   if (--$max_rows <= 0) { last; }
 }
-
 ```
 
-```{ruby engine.path="C:/Ruby23-x64/bin/ruby.exe"}
+```{ruby}
 require 'csv'
 require 'pp'
-require 'yaml'
-
-# print pp(ENV)
-
-file_in = ENV["file_in"]
-
-file_in = file_in + ".csv"
+file_in = ENV["file_in"] + ".csv"
 customers = CSV.read(file_in)
-
 pp(customers[1..3])
-
 ```
 
 
@@ -453,15 +445,14 @@ $$
 
 # Tidy up after ourselves
 
-```{r TakeDown, echo=FALSE}
-if (interactive()) {
+```{r TakeDown, echo=FALSE, eval=is.windows}
+if (!interactive()) {
   invisible({
     dbDisconnect(db)
     # dbDisconnect(db_prod)
     dbUnloadDriver(drv)
   })
 }
-
 ```
 
 # Sneaky Stuff
@@ -494,11 +485,8 @@ This code ensure that when we `knit` the document, all changes get committed to
 reproducability.
 
 
-```{cmd}
+```{bash}
 git add -A .
 git commit -m "Knitting..."
-git status
 git rev-parse HEAD
-
 ```
-

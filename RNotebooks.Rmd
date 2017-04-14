@@ -204,16 +204,16 @@ awk -F, -e 'NF != 9 {print}' Service-Station-and-Price-History-March-2017.csv | 
 Blah!  Commas in the addresses (and quotes that BCP won't like either).
 
 Re-export using [ASCII Delimiters](https://ronaldduncan.wordpress.com/2009/10/31/text-file-formats-ascii-delimited-text-not-csv-or-tab-delimited-text/)
-0x0F (Unit Separator) and 0x0E (Record Separator), and supress the quotes.
+0x1F (Unit Separator) and 0x1E (Record Separator), and supress the quotes.
 
 ```{r}
 write.table(
   DATA, 
-  'Service-Station-and-Price-History-March-2017.0F0E', 
+  'Service-Station-and-Price-History-March-2017.1F1E', 
   row.names = FALSE,
   quote = FALSE,
-  sep = "\x0F",
-  eol = "\x0E")
+  sep = "\x1F",
+  eol = "\x1E")
 
 ```
 
@@ -221,16 +221,16 @@ And re-test:
 
 
 ```{bash}
-< Service-Station-and-Price-History-March-2017.0F0E \
-  tr -d -c $'\x0E\x0F' | 
-  tr $'\x0E' '\n' |
+< Service-Station-and-Price-History-March-2017.1F1E \
+  tr -d -c $'\x1E\x1F' | 
+  tr $'\x1E' '\n' |
   awk -e '1 {print length($0)}' | 
   sort | 
   uniq -c
 
 ```
   
-## Upload the 0E0F
+## Upload the 1E1F
 
 ```{r echo=FALSE}
 # For non-windows, we won't to the sql parts
@@ -329,9 +329,9 @@ Now I can craft the `bcp` for upload.
 bcp \
   "dbo.[Service-Station-and-Price-History-March-2017]" \
   in \
-  'Service-Station-and-Price-History-March-2017.0F0E' \
+  'Service-Station-and-Price-History-March-2017.1F1E' \
   -T -S . -d test \
-  -c -t $'\x0F' -r $'\x0E' -C UTF-8 \
+  -c -t $'\x1F' -r $'\x1E' -C UTF-8 \
   -F 2 \
   -h TABLOCK -b 100000 \
   -e errors

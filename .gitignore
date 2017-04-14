@@ -18,3 +18,4 @@ errors
 *.gz
 *.zip
 Service-Station-and-Price-History-March-2017.Rmd
+*.csvy

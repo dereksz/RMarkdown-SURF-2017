@@ -144,7 +144,7 @@ typically through the file system.
 
 Here's a quick example in Perl:
 
-```{perl, engine.path="C:/Strawberry/perl/bin/perl.exe"}
+```{perl}
 use strict;
 my $a = 5;
 while($a > 0) {
@@ -327,6 +327,9 @@ Why I'm a raving fan
 Demo
 ========================================================
 type: prompt
+
+Demo RNotebook available at <br>
+https://github.com/dereksz/RMarkdown-SURF-2017
 
 If time permits...
 ========================================================
